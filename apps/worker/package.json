@@ -1,0 +1,25 @@
+{
+  "name": "@scanner/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/scan-processor.ts",
+    "start": "tsx src/scan-processor.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@scanner/shared": "workspace:*",
+    "@scanner/scanners": "workspace:*",
+    "@scanner/report-engine": "workspace:*",
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^5.28.0",
+    "execa": "^9.5.1",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@aws-sdk/client-s3": "^3.677.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
