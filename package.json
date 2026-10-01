@@ -1,0 +1,26 @@
+{
+  "name": "security-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-platform security analysis platform (Web, Mobile, Desktop) with SAST, SCA, secrets scanning, active DAST, and automatic generation of fix prompts for Claude.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @scanner/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "worker:dev": "pnpm --filter @scanner/worker dev",
+    "db:generate": "pnpm --filter @scanner/shared db:generate",
+    "db:migrate": "pnpm --filter @scanner/shared db:migrate",
+    "db:studio": "pnpm --filter @scanner/shared db:studio"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "license": "MIT"
+}
