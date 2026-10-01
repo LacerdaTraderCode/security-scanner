@@ -29,7 +29,13 @@ export async function encryptToken(plainText: string): Promise<string> {
 }
 
 export async function decryptToken(encoded: string): Promise<string> {
-  const [ivB64, authTagB64, cipherB64] = encoded.split(".");
+  const parts = encoded.split(".");
+  const ivB64 = parts[0];
+  const authTagB64 = parts[1];
+  const cipherB64 = parts[2];
+  if (!ivB64 || !authTagB64 || !cipherB64) {
+    throw new Error("Malformed encrypted token — expected format iv.authTag.ciphertext");
+  }
   const iv = Buffer.from(ivB64, "base64");
   const authTag = Buffer.from(authTagB64, "base64");
   const cipherText = Buffer.from(cipherB64, "base64");
