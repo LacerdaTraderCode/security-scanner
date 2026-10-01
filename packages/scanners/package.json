@@ -4,6 +4,10 @@
   "private": true,
   "main": "./src/orchestrator.ts",
   "types": "./src/orchestrator.ts",
+  "exports": {
+    ".": "./src/orchestrator.ts",
+    "./orchestrator": "./src/orchestrator.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
