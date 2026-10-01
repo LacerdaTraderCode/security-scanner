@@ -1,0 +1,258 @@
+// Database schema — Postgres (recommended: Neon or Supabase)
+// This schema covers: users, projects, scans, findings (security findings),
+// and the history of fix prompts generated via Claude.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Users & Auth ─────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  githubId      String?   @unique
+  githubLogin   String?
+  // GitHub access token (encrypted at rest by the application layer,
+  // never stored in plaintext — see packages/shared/src/crypto.ts)
+  githubTokenEnc String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects      Project[]
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+// API keys for programmatic use (CI/CD, scripts)
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String   @unique // hash of the key, never the key itself
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// ───────────────────────────── Projects ─────────────────────────────
+
+enum ProjectSourceType {
+  GITHUB_REPO
+  UPLOAD_ZIP
+  UPLOAD_ARCHIVE
+  PUBLIC_URL_ONLY
+}
+
+enum PlatformType {
+  WEB
+  MOBILE_ANDROID
+  MOBILE_IOS
+  DESKTOP
+  API_BACKEND
+  INFRA_IAC
+  UNKNOWN
+}
+
+model Project {
+  id            String            @id @default(cuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  sourceType    ProjectSourceType
+  // Git repo URL, or null for uploads
+  repoUrl       String?
+  repoBranch    String?           @default("main")
+  // For uploads: storage path (S3/R2) of the original zip, kept for audit purposes
+  uploadStorageKey String?
+  // Authorized live URL for active DAST testing (pentest). Null = static analysis only.
+  liveTargetUrl String?
+  // Explicit user confirmation of authorization to test liveTargetUrl
+  liveTargetAuthorized Boolean    @default(false)
+  platforms     PlatformType[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  scans         Scan[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+// ───────────────────────────── Scans ─────────────────────────────
+
+enum ScanStatus {
+  QUEUED
+  CLONING
+  RUNNING_SAST
+  RUNNING_SCA
+  RUNNING_SECRETS
+  RUNNING_MOBILE
+  RUNNING_DAST
+  RUNNING_DEEP_CHECKS
+  GENERATING_REPORT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Scan {
+  id            String      @id @default(cuid())
+  projectId     String
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status        ScanStatus  @default(QUEUED)
+  // Analyzed commit SHA, if applicable
+  commitSha     String?
+  // Which modules were requested for this specific scan
+  modulesRequested String[] // e.g. ["semgrep","gitleaks","osv","trivy","mobsf","nuclei","deep-checks"]
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
+  errorMessage  String?
+  // Aggregated metrics (filled on completion, for fast dashboard queries)
+  totalFindings     Int @default(0)
+  criticalCount      Int @default(0)
+  highCount          Int @default(0)
+  mediumCount        Int @default(0)
+  lowCount           Int @default(0)
+  infoCount          Int @default(0)
+  createdAt     DateTime    @default(now())
+
+  findings      Finding[]
+  toolRuns      ToolRun[]
+
+  @@index([projectId])
+  @@map("scans")
+}
+
+// Individual run of each tool within a scan (for debugging/observability)
+model ToolRun {
+  id          String   @id @default(cuid())
+  scanId      String
+  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  tool        String   // "semgrep" | "gitleaks" | "osv-scanner" | "trivy" | "mobsf" | "nuclei" | "deep-checks" | "checkov"
+  status      String   // "success" | "failed" | "skipped"
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  rawOutputStorageKey String? // path to the raw tool output, kept for audit purposes
+  errorMessage String?
+
+  @@index([scanId])
+  @@map("tool_runs")
+}
+
+// ───────────────────────────── Findings ─────────────────────────────
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum FindingCategory {
+  INJECTION
+  BROKEN_AUTH
+  BROKEN_ACCESS_CONTROL
+  SENSITIVE_DATA_EXPOSURE
+  SECURITY_MISCONFIGURATION
+  XSS
+  INSECURE_DESERIALIZATION
+  VULNERABLE_DEPENDENCY
+  SECRET_LEAK
+  SSRF
+  INSECURE_STORAGE_MOBILE
+  INSECURE_COMMUNICATION
+  MEMORY_SAFETY
+  IPC_INSECURE
+  SUPPLY_CHAIN
+  MISSING_SECURITY_HEADERS
+  RATE_LIMITING_POLICY
+  BINARY_EXPOSURE
+  IAC_MISCONFIGURATION
+  OTHER
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  FIXED
+  FALSE_POSITIVE
+  RISK_ACCEPTED
+}
+
+model Finding {
+  id            String          @id @default(cuid())
+  scanId        String
+  scan          Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  tool          String          // tool that produced this finding
+  ruleId        String?         // rule id in the source tool (e.g. semgrep rule id, CVE id)
+  severity      Severity
+  category      FindingCategory
+  title         String
+  description   String          @db.Text
+
+  // Location of the issue
+  filePath      String?
+  lineStart     Int?
+  lineEnd       Int?
+  // For dependency findings (SCA)
+  packageName   String?
+  packageVersion String?
+  cveId         String?
+  cvssScore     Float?
+
+  // For DAST findings (active pentest)
+  endpointUrl   String?
+  httpMethod    String?
+
+  // Relevant code snippet (sanitized, no real secrets exposed)
+  codeSnippet   String?         @db.Text
+
+  // Fix recommendation in natural language
+  remediation   String          @db.Text
+
+  // Ready-to-use prompt generated for pasting into Claude / Claude Code, specific to this finding
+  claudePrompt  String?         @db.Text
+
+  status        FindingStatus   @default(OPEN)
+  isStructuralOnly Boolean      @default(false) // true for deep-checks module findings (not proof of real exploitation)
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([scanId])
+  @@index([severity])
+  @@index([category])
+  @@map("findings")
+}
+
+// ───────────────────────────── Audit ─────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g. "scan.started", "project.created", "live_target.authorized"
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("audit_logs")
+}
