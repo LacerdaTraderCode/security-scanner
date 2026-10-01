@@ -1,0 +1,17 @@
+{
+  "name": "@scanner/report-engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/claude-prompt-generator.ts",
+  "types": "./src/claude-prompt-generator.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@scanner/shared": "workspace:*",
+    "@anthropic-ai/sdk": "^0.30.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
