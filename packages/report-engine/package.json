@@ -4,6 +4,10 @@
   "private": true,
   "main": "./src/claude-prompt-generator.ts",
   "types": "./src/claude-prompt-generator.ts",
+  "exports": {
+    ".": "./src/claude-prompt-generator.ts",
+    "./claude-prompt-generator": "./src/claude-prompt-generator.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
@@ -12,6 +16,7 @@
     "@anthropic-ai/sdk": "^0.30.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
   }
 }
