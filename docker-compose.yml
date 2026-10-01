@@ -1,0 +1,59 @@
+# Full local environment: Redis (queue), Postgres (dev), MobSF (mobile SAST/dynamic
+# analysis), and the worker. In production: Redis = Upstash, Postgres = Neon/Supabase,
+# MobSF = its own container on Railway/Render.
+
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scanner
+      POSTGRES_PASSWORD: scanner_dev_password
+      POSTGRES_DB: security_scanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  # MobSF — SAST + static/dynamic analysis for Android (.apk) and iOS (.ipa).
+  # Covers the entire Mobile section of the scope: Keystore/Keychain, exported
+  # components, SSL pinning, deep links, plaintext SharedPreferences/NSUserDefaults.
+  mobsf:
+    image: opensecurity/mobile-security-framework-mobsf:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - mobsf-data:/home/mobsf/.MobSF
+    environment:
+      MOBSF_API_KEY: ${MOBSF_API_KEY:-dev-local-key-change-in-prod}
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    depends_on:
+      - redis
+      - postgres
+      - mobsf
+    environment:
+      DATABASE_URL: postgresql://scanner:scanner_dev_password@postgres:5432/security_scanner
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MOBSF_URL: http://mobsf:8000
+      MOBSF_API_KEY: ${MOBSF_API_KEY:-dev-local-key-change-in-prod}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    env_file:
+      - .env
+
+volumes:
+  redis-data:
+  postgres-data:
+  mobsf-data:
