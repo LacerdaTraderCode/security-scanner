@@ -82,7 +82,7 @@ export async function runMobSF(target: ScanTarget): Promise<ScanModuleResult> {
       headers: { Authorization: MOBSF_API_KEY },
       body: formData,
     });
-    const upload: MobSFUploadResponse = await uploadRes.json();
+    const upload = (await uploadRes.json()) as MobSFUploadResponse;
 
     // 2. Trigger the scan
     await fetch(`${MOBSF_URL}/api/v1/scan`, {
@@ -97,7 +97,7 @@ export async function runMobSF(target: ScanTarget): Promise<ScanModuleResult> {
       headers: { Authorization: MOBSF_API_KEY, "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ hash: upload.hash }),
     });
-    const report: MobSFReport = await reportRes.json();
+    const report = (await reportRes.json()) as MobSFReport;
 
     const findings: NormalizedFinding[] = [];
 
