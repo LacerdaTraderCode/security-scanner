@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Finding, type ToolRun } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { FindingCard } from "@/components/FindingCard";
@@ -24,7 +24,7 @@ export default async function ScanResultsPage({ params }: { params: { id: string
 
   const findingsBySeverity = SEVERITY_ORDER.map((sev) => ({
     severity: sev,
-    findings: scan.findings.filter((f) => f.severity === sev),
+    findings: scan.findings.filter((f: Finding) => f.severity === sev),
   })).filter((g) => g.findings.length > 0);
 
   return (
@@ -54,7 +54,7 @@ export default async function ScanResultsPage({ params }: { params: { id: string
 
       {/* Status of each tool that ran */}
       <div className="flex flex-wrap gap-2">
-        {scan.toolRuns.map((run) => (
+        {scan.toolRuns.map((run: ToolRun) => (
           <span
             key={run.id}
             className={`text-xs px-2 py-1 rounded-full border ${
@@ -84,11 +84,12 @@ export default async function ScanResultsPage({ params }: { params: { id: string
               {group.severity} ({group.findings.length})
             </h2>
             <div className="space-y-3">
-              {group.findings.map((finding) => (
+              {group.findings.map((finding: Finding) => (
                 <FindingCard
                   key={finding.id}
                   finding={{
                     ...finding,
+                    severity: finding.severity as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO",
                     codeSnippet: finding.codeSnippet,
                     claudePrompt: finding.claudePrompt,
                   }}
