@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+.turbo/
+*.tsbuildinfo
+.gitleaks-report.json
+/apps/web/.next/
+/packages/shared/prisma/migrations/dev/
+.vercel
