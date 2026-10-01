@@ -4,11 +4,13 @@ import { useState } from "react";
 import { Copy, Check, AlertTriangle, ShieldAlert, Info } from "lucide-react";
 import clsx from "clsx";
 
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+
 interface FindingCardProps {
   finding: {
     id: string;
     tool: string;
-    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
+    severity: Severity;
     category: string;
     title: string;
     description: string;
@@ -22,7 +24,7 @@ interface FindingCardProps {
   };
 }
 
-const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; icon: typeof AlertTriangle }> = {
+const SEVERITY_STYLES: Record<Severity, { bg: string; text: string; border: string; icon: typeof AlertTriangle }> = {
   CRITICAL: { bg: "bg-red-950/40", text: "text-red-400", border: "border-red-500/40", icon: ShieldAlert },
   HIGH: { bg: "bg-orange-950/40", text: "text-orange-400", border: "border-orange-500/40", icon: AlertTriangle },
   MEDIUM: { bg: "bg-yellow-950/40", text: "text-yellow-400", border: "border-yellow-500/40", icon: AlertTriangle },
