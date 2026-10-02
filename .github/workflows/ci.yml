@@ -19,6 +19,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
+        env:
+          # Some CI/sandboxed networks block binaries.prisma.sh's checksum
+          # endpoint; this skips checksum verification without failing the
+          # build. The query engine binary itself still downloads normally
+          # on networks that allow it.
+          PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: "1"
       - run: pnpm typecheck
 
   # Bonus: the project scans itself with Semgrep + Gitleaks in CI —
