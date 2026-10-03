@@ -12,3 +12,4 @@ build/
 /apps/web/.next/
 /packages/shared/prisma/migrations/dev/
 .vercel
+next-env.d.ts
