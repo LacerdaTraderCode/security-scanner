@@ -7,12 +7,13 @@ const prisma = new PrismaClient();
 
 const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] as const;
 
-export default async function ScanResultsPage({ params }: { params: { id: string } }) {
+export default async function ScanResultsPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) notFound();
+  const { id } = await params;
 
   const scan = await prisma.scan.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       project: true,
       toolRuns: true,
