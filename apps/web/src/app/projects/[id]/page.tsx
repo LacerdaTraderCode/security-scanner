@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrismaClient } from "@prisma/client";
-import { ArrowLeft, Clock } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowLeft, Clock, Lock, Globe } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { RunScanButton } from "@/components/RunScanButton";
 
@@ -15,6 +16,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
+  if (!session?.user?.id) redirect("/login");
   const { id } = await params;
 
   const project = await prisma.project.findUnique({
@@ -22,16 +24,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     include: { scans: { orderBy: { createdAt: "desc" } } },
   });
 
-  if (!project) notFound();
-  // Public-source projects are viewable by anyone; everything else requires ownership.
-  if (project.sourceType !== "PUBLIC_URL_ONLY" && project.userId !== session?.user?.id) {
-    notFound();
-  }
+  // Every project is strictly scoped to its owner — there is no public
+  // viewing path, matching the "always require login" policy.
+  if (!project || project.userId !== session.user.id) notFound();
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <Link
-        href={session?.user ? "/dashboard" : "/"}
+        href="/dashboard"
         className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -43,7 +43,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <RunScanButton projectId={project.id} />
       </div>
       {project.repoUrl && (
-        <p className="text-sm text-slate-500 mb-1 break-all">{project.repoUrl}</p>
+        <p className="text-sm text-slate-500 mb-1 break-all flex items-center gap-1.5">
+          {project.isPrivate ? (
+            <Lock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+          ) : (
+            <Globe className="h-3.5 w-3.5 text-slate-600 shrink-0" />
+          )}
+          {project.repoUrl}
+        </p>
       )}
       <div className="flex flex-wrap gap-1.5 mb-8">
         {project.platforms.map((p: string) => (
