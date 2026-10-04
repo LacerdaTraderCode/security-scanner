@@ -5,6 +5,7 @@ import { Queue } from "bullmq";
 import { auth } from "@/lib/auth";
 import { decryptToken } from "@/lib/crypto";
 import type { ScanModule } from "@scanner/shared/types/finding";
+import { resolveConcurrentScanLimit } from "@scanner/shared/plans";
 
 const prisma = new PrismaClient();
 
@@ -57,6 +58,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Project not found or access denied." }, { status: 404 });
   }
 
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, include: { plan: true } });
+  if (!user) {
+    return NextResponse.json({ error: "User not found." }, { status: 404 });
+  }
+
+  // Plan enforcement: block the scan (not just display a warning) once the
+  // user is already at their concurrent-scan limit. "Concurrent" here means
+  // QUEUED or any RUNNING_* status — a COMPLETED/FAILED scan doesn't count.
+  // Admins and, when billing is globally disabled, every user, are
+  // unlimited — resolveConcurrentScanLimit returns null for "no limit".
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const limit = resolveConcurrentScanLimit({
+    isAdmin: user.role === "ADMIN",
+    billingEnabled: settings?.billingEnabled ?? false,
+    plan: user.plan,
+  });
+
+  if (limit !== null) {
+    const activeScanCount = await prisma.scan.count({
+      where: {
+        project: { userId: session.user.id },
+        status: { notIn: ["COMPLETED", "FAILED", "CANCELLED"] },
+      },
+    });
+    if (activeScanCount >= limit) {
+      return NextResponse.json(
+        {
+          error: `You've reached your ${user.plan?.name ?? "current"} plan limit of ${limit} concurrent scan${
+            limit === 1 ? "" : "s"
+          }. Wait for a scan to finish, or upgrade your plan.`,
+          upgradeRequired: true,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   const modulesRequested =
     (parsed.data.modulesRequested as ScanModule[]) ??
     resolveModulesForPlatforms(project.platforms, Boolean(project.liveTargetUrl && project.liveTargetAuthorized));
@@ -72,8 +110,7 @@ export async function POST(req: NextRequest) {
   // Decrypt the GitHub token only at the moment of enqueueing, and it travels
   // to the worker via the queue payload (internal Redis, not exposed) — it
   // never goes back to plaintext in the database.
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  const githubToken = user?.githubTokenEnc ? await decryptToken(user.githubTokenEnc) : undefined;
+  const githubToken = user.githubTokenEnc ? await decryptToken(user.githubTokenEnc) : undefined;
 
   await scanQueue.add("run-scan", {
     scanId: scan.id,
