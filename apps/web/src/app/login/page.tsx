@@ -1,14 +1,15 @@
 import { signIn } from "@/lib/auth";
-import { Github, ShieldCheck } from "lucide-react";
+import { Github, ShieldCheck, Lock } from "lucide-react";
 
 export default function LoginPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 text-center">
       <ShieldCheck className="h-14 w-14 text-emerald-400 mb-6" />
-      <h1 className="text-2xl font-semibold text-slate-100 mb-2">Sign in</h1>
+      <h1 className="text-2xl font-semibold text-slate-100 mb-2">Sign in to continue</h1>
       <p className="text-slate-400 max-w-sm mb-8 text-sm">
-        Connect your GitHub account to scan private repositories, or continue without an
-        account to scan a public repository.
+        A GitHub sign-in is required for every scan — this is what lets us confirm a repository
+        is actually yours (or that you've forked it) before testing it, and keeps your results
+        private to your account.
       </p>
 
       <form
@@ -26,18 +27,10 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <div className="flex items-center gap-3 my-6 w-full max-w-xs">
-        <div className="h-px bg-slate-800 flex-1" />
-        <span className="text-xs text-slate-500">or</span>
-        <div className="h-px bg-slate-800 flex-1" />
-      </div>
-
-      <a
-        href="/projects/new?source=public"
-        className="text-sm text-slate-400 hover:text-slate-200 underline underline-offset-4"
-      >
-        Scan a public repository without signing in
-      </a>
+      <p className="flex items-center gap-1.5 text-xs text-slate-600 mt-6">
+        <Lock className="h-3 w-3" />
+        Your repositories and scan results are never visible to other accounts.
+      </p>
     </div>
   );
 }
