@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PrismaClient, type Project } from "@prisma/client";
 import { auth, signOut } from "@/lib/auth";
-import { Plus, ShieldCheck, LogOut, FolderGit2 } from "lucide-react";
+import { Plus, ShieldCheck, LogOut, FolderGit2, ShieldAlert } from "lucide-react";
 
 const prisma = new PrismaClient();
 
@@ -32,6 +32,16 @@ export default async function DashboardPage() {
           <ShieldCheck className="h-6 w-6 text-emerald-400" />
           <span className="font-semibold text-slate-100">Security Scanner</span>
         </div>
+        <div className="flex items-center gap-4">
+          {session.user.role === "ADMIN" && (
+            <Link
+              href="/admin/users"
+              className="flex items-center gap-1.5 text-sm text-amber-400 hover:text-amber-300"
+            >
+              <ShieldAlert className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
         <form
           action={async () => {
             "use server";
@@ -46,6 +56,7 @@ export default async function DashboardPage() {
             Sign out
           </button>
         </form>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-6">
