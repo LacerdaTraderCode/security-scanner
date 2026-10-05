@@ -13,6 +13,11 @@ datasource db {
 
 // ───────────────────────────── Users & Auth ─────────────────────────────
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -26,11 +31,79 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // ADMIN is granted automatically to whoever signs in first (see the
+  // signIn callback in apps/web/src/lib/auth.ts) and manually by an
+  // existing admin afterwards, from /admin/users. Admins get unlimited
+  // concurrent scans regardless of planId — see the limit check in
+  // apps/web/src/app/api/scans/route.ts.
+  role          UserRole  @default(USER)
+  // Admin kill-switch for one account — a disabled user can no longer sign
+  // in (checked in the signIn callback) and their running/queued scans are
+  // left alone but no new ones can be created. Does not delete any data.
+  isActive      Boolean   @default(true)
+
+  // Plan is a reference to an admin-editable PlanConfig row, not a hardcoded
+  // enum — this is what lets an admin change limits/prices/availability at
+  // runtime from /admin/plans without a deploy. Null means "not yet
+  // assigned", which the app treats as the plan marked isDefault.
+  planId        String?
+  plan          PlanConfig? @relation(fields: [planId], references: [id])
+
+  // ── Billing (Stripe) ──
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripeCurrentPeriodEnd DateTime?
+
   projects      Project[]
   apiKeys       ApiKey[]
   auditLogs     AuditLog[]
 
   @@map("users")
+}
+
+// Admin-editable plan definitions — the runtime source of truth for scan
+// limits, pricing, and whether a plan is purchasable at all. Seeded once
+// (see packages/shared/prisma/seed.ts) with Free/Starter/Pro/Scale, then
+// fully editable from /admin/plans: an admin can rename a plan, change its
+// concurrent-scan limit, change its price, or mark it unavailable for new
+// signups — none of that requires a code change or deploy.
+model PlanConfig {
+  id                 String   @id @default(cuid())
+  key                String   @unique // stable machine key, e.g. "free" — used to map Stripe prices
+  name               String   // display name, editable
+  maxConcurrentScans Int
+  priceMonthlyUsd    Int      @default(0)
+  stripePriceId      String?  // Stripe Price ID for this plan's subscription, set by the admin
+  // Whether this plan can be selected by users (e.g. hide Scale while
+  // onboarding manually). Existing subscribers keep working even if their
+  // plan is later made unavailable.
+  isAvailable        Boolean  @default(true)
+  // The plan every new user starts on.
+  isDefault          Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users              User[]
+
+  @@map("plan_configs")
+}
+
+// Single-row table holding global toggles an admin controls from /admin.
+// Read on the hot path (every scan-creation request checks billingEnabled),
+// so this is intentionally a tiny, single-row table rather than a generic
+// key-value store — cheap to query, impossible to end up with conflicting
+// settings.
+model SystemSettings {
+  id              Int      @id @default(1)
+  // When false, plan limits are NOT enforced at all (every user scans
+  // without restriction) and the pricing page / checkout are hidden — the
+  // "billing mode" switch requested for soft-launching before charging
+  // anyone.
+  billingEnabled  Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+
+  @@map("system_settings")
 }
 
 // API keys for programmatic use (CI/CD, scripts)
@@ -82,6 +155,9 @@ model Project {
   liveTargetUrl String?
   // Explicit user confirmation of authorization to test liveTargetUrl
   liveTargetAuthorized Boolean    @default(false)
+  // Mirrors the repo's visibility on GitHub at the time it was added —
+  // surfaced in the UI as the Public/Private badge on the project.
+  isPrivate     Boolean           @default(false)
   platforms     PlatformType[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -240,6 +316,22 @@ model Finding {
   @@index([severity])
   @@index([category])
   @@map("findings")
+}
+
+// ───────────────────────────── Billing events ─────────────────────────────
+
+// Raw Stripe webhook log, kept for reconciliation/debugging. The source of
+// truth for "what plan is this user on right now" is always User.planId,
+// updated synchronously by the webhook handler — this table is an audit
+// trail, not something queried on the hot path.
+model BillingEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String   // e.g. "customer.subscription.updated"
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  @@map("billing_events")
 }
 
 // ───────────────────────────── Audit ─────────────────────────────
